@@ -210,18 +210,16 @@ fn parse_rss_xml(xml_content :&str, args: &Args) -> Result<Vec<RssItem>> {
 fn display_announcement(item: &RssItem, index: usize, total: usize, args: &Args) {
     // link
     println!("{} {}",
-        "📢 <announcement>".bright_yellow().bold(),
+        "📢".bright_yellow().bold(),
              format!("[{}]", item.link).blue().underline());
 
     //title
-    println!("   {} {} {}",
-        "🏷️".bright_blue(),
+    println!("   {} {}",
              item.title.bright_white().bold(),
              format!("({}/{})", index, total).dimmed());
 
     if let Some(date) = &item.pub_date{
-        println!("  {} {}",
-            "📅".green(),
+        println!("  {}",
                  format_date(date).cyan());
     }
 
