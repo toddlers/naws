@@ -53,6 +53,27 @@ struct RssItem {
     pub_date: Option<String>,
     categories: Vec<String>,
 }
+
+impl RssItem {
+    fn from_hashmap(
+        item_data: &HashMap<String, String>,
+        categories: Vec<String>,
+        include_description: bool,
+    ) -> Self {
+        let description = if include_description {
+            Some(item_data.get("description").cloned().unwrap_or_default())
+        } else {
+            None
+        };
+        Self {
+            title: item_data.get("title").cloned().unwrap_or_else(|| "#Untitled".to_string()),
+            link: item_data.get("link").cloned().unwrap_or_else(|| "#Untitled".to_string()),
+            description,
+            pub_date: item_data.get("pubdate").cloned(),
+            categories,
+        }
+    }
+}
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
@@ -180,36 +201,7 @@ fn parse_rss_xml(xml_content :&str, args: &Args) -> Result<Vec<RssItem>> {
                    inside_item = false;
                if let Some(item_data) = current_item.take() {
                    // create RssItem from collected data
-                   if args.show_description {
-                       let rss_item = RssItem {
-                           title: item_data
-                               .get("title")
-                               .map_or_else(|| "#Untitled".to_string(), String::clone),
-                           link: item_data
-                               .get("link")
-                               .map_or_else(|| "#Untitled".to_string(), String::clone),
-                           description: Option::from(item_data
-                               .get("description")
-                               .map_or_else(|| "#".to_string(), String::clone)),
-                           pub_date: item_data.get("pubdate").cloned(),
-                           categories: current_categories.clone(),
-                       };
-                       items.push(rss_item);
-                   } else {
-                       let rss_item = RssItem {
-                           title: item_data
-                               .get("title")
-                               .map_or_else(|| "#Untitled".to_string(), String::clone),
-                           link: item_data
-                               .get("link")
-                               .map_or_else(|| "#Untitled".to_string(), String::clone),
-                           description: None,
-                           pub_date: item_data.get("pubdate").cloned(),
-                           categories: current_categories.clone(),
-                       };
-                       items.push(rss_item);
-                   }
-
+                   items.push(RssItem::from_hashmap(&item_data, current_categories.clone(), args.full_description));
                }
                } else if inside_item && tag_name == current_tag {
                current_tag.clear();
