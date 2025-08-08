@@ -5,10 +5,12 @@ mod utils;
 use utils::{decode_tag, format_date};
 use anyhow::{Result,Context};
 use clap::{arg, Parser};
-use quick_xml::events::Event;
-use quick_xml::Reader;
-use std::collections::HashMap;
+// use quick_xml::events::Event;
+// use quick_xml::Reader;
+// use std::collections::HashMap;
+// use chrono::format::Item;
 use colored::*;
+use serde::{Deserialize,Serialize};
 
 #[derive(Parser,Debug)]
 #[command(author, version, about, long_about = None)]
@@ -42,44 +44,65 @@ struct Args{
     #[arg(short='d', long)]
     show_description: bool,
 
+    // markdown or json
+    #[arg(short='j', long)]
+    json: bool,
+
+}
+
+
+#[derive(Debug, Deserialize)]
+struct RssFeed{
+    channel: RssChannel,
+}
+
+#[derive(Debug, Deserialize)]
+struct RssChannel{
+    #[serde(rename = "item")]
+    items: Vec<RssItemRaw>,
 }
 
 // rss item
-#[derive(Debug,Clone)]
-struct RssItem {
-    title: String,
-    link: String,
+#[derive(Debug,Clone, Deserialize)]
+struct RssItemRaw {
+    title: Option<String>,
+    link: Option<String>,
     description: Option<String>,
+    #[serde(rename = "pubDate")]
     pub_date: Option<String>,
+    #[serde(default)]
     categories: Vec<String>,
 }
 
-impl RssItem {
-    fn from_hashmap(
-        item_data: &HashMap<String, String>,
-        categories: Vec<String>,
-        include_description: bool,
-    ) -> Self {
-        let description = if include_description {
-            Some(item_data.get("description").cloned().unwrap_or_default())
-        } else {
-            None
-        };
+#[derive(Debug,Clone,Serialize)]
+pub struct RssItem {
+    pub title: String,
+    pub link: String,
+    pub description: Option<String>,
+    pub pub_date: Option<String>,
+    pub categories: Vec<String>,
+}
+
+impl From<RssItemRaw> for RssItem{
+    fn from(raw: RssItemRaw) -> Self {
         Self {
-            title: item_data.get("title").cloned().unwrap_or_else(|| "#Untitled".to_string()),
-            link: item_data.get("link").cloned().unwrap_or_else(|| "#Untitled".to_string()),
-            description,
-            pub_date: item_data.get("pubdate").cloned(),
-            categories,
+            title: raw.title.unwrap_or_else(|| "#Untitled".into()),
+            link: raw.link.unwrap_or_else(|| "#NoLinl".into()),
+            description: raw.description,
+            pub_date: raw.pub_date,
+            categories: raw.categories,
         }
     }
 }
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
     println!("Fetching AWS RSS feeds from: {}", args.url);
     println!("Limit: {} items", args.limit);
-
+    if args.no_color{
+        control::set_override(false)
+    }
     // implement RSS parsing
     let mut items = fetch_and_parse_rss(&args).await?;
     println!("\n📢 AWS Announcements:\n");
@@ -104,6 +127,11 @@ async fn main() -> Result<()> {
     }
     let display_count  = std::cmp::min(items.len(), args.limit);
 
+    if args.json{
+        println!("{:?}", serde_json::to_string_pretty(&items)?);
+        return Ok(());
+    }
+
     for (i, mut item) in items.iter().enumerate(){
         if i >= display_count {
             break;
@@ -126,6 +154,7 @@ async fn fetch_and_parse_rss(args: &Args) -> Result<Vec<RssItem>> {
     let response = client
         .get(&args.url)
         .header("User-Agent","naws/0.1.0")
+        .header("User-Agent", "Mozilla/5.0 (compatible; naws/0.1.0; +https://github.com/yourhandle/naws)")
         .send()
         .await
         .context("Failed to fetch RSS feed")?;
@@ -140,80 +169,16 @@ async fn fetch_and_parse_rss(args: &Args) -> Result<Vec<RssItem>> {
     println!("✅ Successfully fetched RSS feed ({} bytes)", xml_content.len());
 
     // parse xml
-    let items = parse_rss_xml(&xml_content, &args)?;
+    let items = parse_rss_xml(&xml_content)?;
     println!("📝 Found {} announcements", items.len());
     Ok(items)
 }
 
 
 
-fn parse_rss_xml(xml_content :&str, args: &Args) -> Result<Vec<RssItem>> {
-    let mut reader = Reader::from_str(xml_content);
-    // seems like func doesn't exist
-    reader.config_mut().trim_text(true);
-    let mut items = Vec::new();
-    let mut buf = Vec::new();
-    let mut current_item: Option<HashMap<String,String>> = None;
-    let mut current_tag = String::new();
-    let mut inside_item = false;
-    let mut current_categories: Vec<String> = Vec::new();
-    loop {
-       match reader.read_event_into(&mut buf) {
-           Ok(Event::Start(ref e)) => {
-               let tag_name = decode_tag(&reader, e.name().as_ref())?.to_ascii_lowercase();
-               if tag_name == "item" {
-                   inside_item = true;
-                   current_item = Some(HashMap::new());
-                   current_categories.clear();
-               } else if inside_item {
-                   current_tag = tag_name
-               }
-           }
-           Ok(Event::Text(e)) => {
-               if inside_item && !current_tag.is_empty() {
-                   if let Some(ref mut item) = current_item {
-                       let reader_decoder = reader.decoder();
-                       // let text = match std::str::from_utf8(&*e){
-                       //     Ok(s) => s.to_string(),
-                       //     Err(_) => String::from_utf8_lossy(&*e).to_string(),
-                       // };
-                       let text = reader_decoder.decode(e.as_ref())?.to_string();
-                       if current_tag == "category" {
-                           current_categories.push(text);
-                       } else {
-                           // handle multiple text nodes for same tag
-                           match item.get(&current_tag) {
-                               Some(existing) => {
-                                   item.insert(
-                                       current_tag.clone(), format!("{} {}", existing, text));
-                               }
-                               None => {
-                                   item.insert(current_tag.clone(), text);
-                               }
-                           }
-                       }
-                   }
-               }
-           }
-           Ok(Event::End(ref e)) => {
-               let tag_name = decode_tag(&reader, e.name().as_ref())?.to_ascii_lowercase();
-               if tag_name == "item" {
-                   inside_item = false;
-               if let Some(item_data) = current_item.take() {
-                   // create RssItem from collected data
-                   items.push(RssItem::from_hashmap(&item_data, current_categories.clone(), args.full_description));
-               }
-               } else if inside_item && tag_name == current_tag {
-               current_tag.clear();
-           }
-       }
-        Ok(Event::Eof) => break,
-        Err(e) => return Err(anyhow::anyhow!("Error parsing XML: {}" ,e)),
-        _ => {}
-       }
-        buf.clear()
-    }
-    Ok(items)
+fn parse_rss_xml(xml_content :&str) -> Result<Vec<RssItem>> {
+    let feed: RssFeed = quick_xml::de::from_str(xml_content)?;
+    Ok(feed.channel.items.into_iter().map(Into::into).collect())
 }
 
 
