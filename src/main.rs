@@ -60,9 +60,27 @@ async fn main() -> Result<()> {
     println!("Limit: {} items", args.limit);
 
     // implement RSS parsing
-    let items = fetch_and_parse_rss(&args).await?;
+    let mut items = fetch_and_parse_rss(&args).await?;
     println!("\n📢 AWS Announcements:\n");
-
+    if let Some(ref filter) = args.filter {
+        let filter = filter.to_lowercase();
+        items = items
+            .into_iter()
+            .filter(|item|{
+                let in_title = item.title.to_lowercase().contains(&filter);
+                let in_description = item
+                    .description
+                    .as_ref()
+                    .map(|desc| desc.to_lowercase().contains(&filter))
+                    .unwrap_or(false);
+                let in_categories = item
+                    .categories
+                    .iter()
+                    .any(|cat| cat.to_lowercase().contains(&filter));
+                in_title || in_description || in_categories
+            })
+            .collect();
+    }
     let display_count  = std::cmp::min(items.len(), args.limit);
 
     for (i, mut item) in items.iter().enumerate(){
