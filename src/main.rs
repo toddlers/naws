@@ -1,22 +1,24 @@
 mod utils;
+use anyhow::{Context, Result};
+use clap::{Parser, arg};
+use colored::*;
+use serde::{Deserialize, Serialize};
 #[allow(dead_code)]
 #[allow(unused_imports)]
 use utils::{decode_tag, format_date};
-use anyhow::{Result,Context};
-use clap::{arg, Parser};
-use colored::*;
-use serde::{Deserialize, Serialize};
 
-#[derive(Parser,Debug)]
+#[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
-struct Args{
-    #[arg(short, long,
-        default_value = "https://aws.amazon.com/about-aws/whats-new/recent/feed/")
-    ]
+struct Args {
+    #[arg(
+        short,
+        long,
+        default_value = "https://aws.amazon.com/about-aws/whats-new/recent/feed/"
+    )]
     url: String,
 
     // number of items to display
-    #[arg(short, long,default_value = "10")]
+    #[arg(short, long, default_value = "10")]
     limit: usize,
 
     // show verbose
@@ -32,33 +34,31 @@ struct Args{
     filter: Option<String>,
 
     // show full description instead of summary
-    #[arg(short='F', long)]
+    #[arg(short = 'F', long)]
     full_description: bool,
 
     // show description
-    #[arg(short='d', long)]
+    #[arg(short = 'd', long)]
     show_description: bool,
 
     // markdown or json
-    #[arg(short='j', long)]
+    #[arg(short = 'j', long)]
     json: bool,
-
 }
 
-
 #[derive(Debug, Deserialize)]
-struct RssFeed{
+struct RssFeed {
     channel: RssChannel,
 }
 
 #[derive(Debug, Deserialize)]
-struct RssChannel{
+struct RssChannel {
     #[serde(rename = "item")]
     items: Vec<RssItemRaw>,
 }
 
 // rss item
-#[derive(Debug,Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct RssItemRaw {
     title: Option<String>,
     link: Option<String>,
@@ -69,7 +69,7 @@ struct RssItemRaw {
     categories: Vec<String>,
 }
 
-#[derive(Debug,Clone,Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct RssItem {
     pub title: String,
     pub link: String,
@@ -78,7 +78,7 @@ pub struct RssItem {
     pub categories: Vec<String>,
 }
 
-impl From<RssItemRaw> for RssItem{
+impl From<RssItemRaw> for RssItem {
     fn from(raw: RssItemRaw) -> Self {
         Self {
             title: raw.title.unwrap_or_else(|| "#Untitled".into()),
@@ -95,7 +95,7 @@ async fn main() -> Result<()> {
     let args = Args::parse();
     println!("Fetching AWS RSS feeds from: {}", args.url);
     println!("Limit: {} items", args.limit);
-    if args.no_color{
+    if args.no_color {
         control::set_override(false)
     }
     // implement RSS parsing
@@ -105,7 +105,7 @@ async fn main() -> Result<()> {
         let filter = filter.to_lowercase();
         items = items
             .into_iter()
-            .filter(|item|{
+            .filter(|item| {
                 let in_title = item.title.to_lowercase().contains(&filter);
                 let in_description = item
                     .description
@@ -120,14 +120,14 @@ async fn main() -> Result<()> {
             })
             .collect();
     }
-    let display_count  = std::cmp::min(items.len(), args.limit);
+    let display_count = std::cmp::min(items.len(), args.limit);
 
-    if args.json{
+    if args.json {
         println!("{:?}", serde_json::to_string_pretty(&items)?);
         return Ok(());
     }
 
-    for (i, mut item) in items.iter().enumerate(){
+    for (i, mut item) in items.iter().enumerate() {
         if i >= display_count {
             break;
         }
@@ -138,18 +138,20 @@ async fn main() -> Result<()> {
     }
 
     if items.len() > args.limit {
-        println!("\n.... and {} more announcements", items.len()-args.limit);
+        println!("\n.... and {} more announcements", items.len() - args.limit);
     }
     Ok(())
 }
-
 
 async fn fetch_and_parse_rss(args: &Args) -> Result<Vec<RssItem>> {
     let client = reqwest::Client::new();
     let response = client
         .get(&args.url)
-        .header("User-Agent","naws/0.1.0")
-        .header("User-Agent", "Mozilla/5.0 (compatible; naws/0.1.0; +https://github.com/yourhandle/naws)")
+        .header("User-Agent", "naws/0.1.0")
+        .header(
+            "User-Agent",
+            "Mozilla/5.0 (compatible; naws/0.1.0; +https://github.com/yourhandle/naws)",
+        )
         .send()
         .await
         .context("Failed to fetch RSS feed")?;
@@ -161,7 +163,10 @@ async fn fetch_and_parse_rss(args: &Args) -> Result<Vec<RssItem>> {
         .await
         .context("Failed to read response body")?;
 
-    println!("✅ Successfully fetched RSS feed ({} bytes)", xml_content.len());
+    println!(
+        "✅ Successfully fetched RSS feed ({} bytes)",
+        xml_content.len()
+    );
 
     // parse xml
     let items = parse_rss_xml(&xml_content)?;
@@ -169,37 +174,34 @@ async fn fetch_and_parse_rss(args: &Args) -> Result<Vec<RssItem>> {
     Ok(items)
 }
 
-
-
-fn parse_rss_xml(xml_content :&str) -> Result<Vec<RssItem>> {
+fn parse_rss_xml(xml_content: &str) -> Result<Vec<RssItem>> {
     let feed: RssFeed = quick_xml::de::from_str(xml_content)?;
     Ok(feed.channel.items.into_iter().map(Into::into).collect())
 }
 
-
 fn display_announcement(item: &RssItem, index: usize, total: usize, args: &Args) {
     // link
-    println!("{} {}",
+    println!(
+        "{} {}",
         "📢".bright_yellow().bold(),
-             format!("[{}]", item.link).blue().underline());
+        format!("[{}]", item.link).blue().underline()
+    );
 
     //title
-    println!("   {} {}",
-             item.title.bright_white().bold(),
-             format!("({}/{})", index, total).dimmed());
+    println!(
+        "   {} {}",
+        item.title.bright_white().bold(),
+        format!("({}/{})", index, total).dimmed()
+    );
 
-    if let Some(date) = &item.pub_date{
-        println!("  {}",
-                 format_date(date).cyan());
+    if let Some(date) = &item.pub_date {
+        println!("  {}", format_date(date).cyan());
     }
 
     // categories
     if !item.categories.is_empty() {
         let categories_str = item.categories.join(", ");
-        println!("  {} {}",
-                 "🏷️".magenta(),
-            categories_str.magenta()
-        );
+        println!("  {} {}", "🏷️".magenta(), categories_str.magenta());
     }
     if args.show_description {
         let description = format_description(&item.description, args.full_description);
@@ -209,15 +211,19 @@ fn display_announcement(item: &RssItem, index: usize, total: usize, args: &Args)
     }
 }
 
-
-
 fn format_description(html: &Option<String>, full_description: bool) -> String {
-    let Some(html_content) = html else {return String::new()};
-    if full_description{
+    let Some(html_content) = html else {
+        return String::new();
+    };
+    if full_description {
         html2text::from_read(html_content.as_bytes(), 80).unwrap()
     } else {
         let text = html2text::from_read(html_content.as_bytes(), 80).unwrap();
-        let summary = text.split_whitespace().take(50).collect::<Vec<_>>().join(" ");
+        let summary = text
+            .split_whitespace()
+            .take(50)
+            .collect::<Vec<_>>()
+            .join(" ");
         if text.split_whitespace().count() > 50 {
             format!("{}...", summary)
         } else {

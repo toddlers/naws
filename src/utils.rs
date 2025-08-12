@@ -6,7 +6,6 @@ pub fn decode_tag(reader: &Reader<&[u8]>, tag_bytes: &[u8]) -> anyhow::Result<St
 }
 
 pub fn format_date(date_str: &str) -> String {
-
     if let Ok(dt) = DateTime::parse_from_rfc3339(date_str) {
         dt.format("%Y-%m-%d %H:%M UTC").to_string()
     } else if let Ok(dt) = DateTime::parse_from_rfc3339(date_str) {
