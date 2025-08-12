@@ -1,7 +1,7 @@
+use crate::display::display_announcement;
+use crate::rss::fetch_and_parse_rss;
 use clap::{Parser, arg};
 use colored::control;
-use crate::rss::fetch_and_parse_rss;
-use crate::display::display_announcement;
 
 #[derive(Parser, Debug)]
 #[command(author, version = env!("CARGO_PKG_VERSION"), about, long_about = None)]
@@ -41,7 +41,6 @@ pub struct Args {
     #[arg(short = 'j', long)]
     json: bool,
 }
-
 
 pub async fn run() -> anyhow::Result<()> {
     let args = Args::parse();

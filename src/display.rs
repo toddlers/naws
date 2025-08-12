@@ -1,7 +1,7 @@
-use colored::Colorize;
+use crate::cli::Args;
 use crate::rss::RssItem;
 use crate::utils::format_date;
-use crate::cli::Args;
+use colored::Colorize;
 
 pub fn display_announcement(item: &RssItem, index: usize, total: usize, args: &Args) {
     // link

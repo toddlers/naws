@@ -1,6 +1,6 @@
+use crate::cli::Args;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
-use crate::cli::Args;
 
 #[derive(Debug, Deserialize)]
 struct RssFeed {

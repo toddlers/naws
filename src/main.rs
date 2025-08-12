@@ -1,7 +1,7 @@
-mod utils;
-mod rss;
-mod display;
 mod cli;
+mod display;
+mod rss;
+mod utils;
 
 use cli::run;
 
@@ -11,8 +11,6 @@ use colored::*;
 #[allow(dead_code)]
 #[allow(unused_imports)]
 use utils::format_date;
-
-
 
 #[tokio::main]
 async fn main() -> Result<()> {
