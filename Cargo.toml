@@ -14,3 +14,4 @@ anyhow = "1.0.98"
 clap = {version = "4.5.41", features = ["derive"]}
 colored = "3.0.0"
 chrono = {version = "0.4.41", features = ["serde"]}
+html2text = "0.15.3"

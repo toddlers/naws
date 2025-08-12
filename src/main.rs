@@ -1,16 +1,11 @@
 mod utils;
-
 #[allow(dead_code)]
 #[allow(unused_imports)]
 use utils::{decode_tag, format_date};
 use anyhow::{Result,Context};
 use clap::{arg, Parser};
-// use quick_xml::events::Event;
-// use quick_xml::Reader;
-// use std::collections::HashMap;
-// use chrono::format::Item;
 use colored::*;
-use serde::{Deserialize,Serialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Parser,Debug)]
 #[command(author, version, about, long_about = None)]
@@ -207,90 +202,26 @@ fn display_announcement(item: &RssItem, index: usize, total: usize, args: &Args)
         );
     }
     if args.show_description {
-        let description = if args.full_description {
-            clean_html_tags_for_terminal(&item.description)
-        } else {
-            create_summary(&item.description)
-        };
-
-        println!("  {} {}",
-                 "📄".yellow(), description.white());
+        let description = format_description(&item.description, args.full_description);
+        if !description.is_empty() {
+            println!("  {} {}", "📄".yellow(), description.white());
+        }
     }
 }
 
 
-fn create_summary(html: &Option<String>) -> String {
-    let cleaned = clean_html_tags_for_terminal(html);
 
-    let words: Vec<&str> = cleaned.split_whitespace().collect();
-    if words.len() <= 50 {
-        cleaned
+fn format_description(html: &Option<String>, full_description: bool) -> String {
+    let Some(html_content) = html else {return String::new()};
+    if full_description{
+        html2text::from_read(html_content.as_bytes(), 80).unwrap()
     } else {
-        // find a breaking point
-        let first_part: String = words.iter().take(50)
-            .map(|&s| s)
-            .collect::<Vec<_>>().join(" ");
-        if let Some(pos) = first_part.rfind('.'){
-            format!("{}...", &first_part[..pos+1])
+        let text = html2text::from_read(html_content.as_bytes(), 80).unwrap();
+        let summary = text.split_whitespace().take(50).collect::<Vec<_>>().join(" ");
+        if text.split_whitespace().count() > 50 {
+            format!("{}...", summary)
         } else {
-            format!("{}...", first_part)
-        }
-
-    }
-}
-
-
-// just don't get into html parsing
-// take a lot of code
-fn clean_html_tags_for_terminal(html: &Option<String>) -> String {
-    let html_str = match html {
-        Some(s) => s,
-        None => return String::new(),
-    };
-
-    // More comprehensive HTML cleaning
-    let text = html_str
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&amp;", "&")
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'")
-        .replace("&nbsp;", " ")
-        .replace("<p>", "")
-        .replace("</p>", " ")
-        .replace("<br>", " ")
-        .replace("<br/>", " ")
-        .replace("<br />", " ")
-        .replace("<div>", "")
-        .replace("</div>", " ")
-        .replace("<span>", "")
-        .replace("</span>", "")
-        .replace("<strong>", "")
-        .replace("</strong>", "")
-        .replace("<b>", "")
-        .replace("</b>", "")
-        .replace("<i>", "")
-        .replace("</i>", "")
-        .replace("<em>", "")
-        .replace("</em>", "")
-        .replace("\n", " ")
-        .replace("\r", "")
-        .replace("\t", " ");
-
-    // Remove any remaining HTML tags using a more robust approach
-    let mut result = String::new();
-    let mut inside_tag = false;
-
-    for ch in text.chars() {
-        match ch {
-            '<' => inside_tag = true,
-            '>' => inside_tag = false,
-            _ if !inside_tag => result.push(ch),
-            _ => {}
+            summary
         }
     }
-
-    // Clean up whitespace
-    let words: Vec<&str> = result.split_whitespace().collect();
-    words.join(" ")
 }
