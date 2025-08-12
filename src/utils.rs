@@ -1,9 +1,4 @@
 use chrono::DateTime;
-use quick_xml::Reader;
-
-pub fn decode_tag(reader: &Reader<&[u8]>, tag_bytes: &[u8]) -> anyhow::Result<String> {
-    Ok(reader.decoder().decode(tag_bytes)?.to_string())
-}
 
 pub fn format_date(date_str: &str) -> String {
     if let Ok(dt) = DateTime::parse_from_rfc3339(date_str) {

@@ -5,7 +5,7 @@ use colored::*;
 use serde::{Deserialize, Serialize};
 #[allow(dead_code)]
 #[allow(unused_imports)]
-use utils::{decode_tag, format_date};
+use utils::format_date;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
