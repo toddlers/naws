@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use utils::format_date;
 
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(author, version = env!("CARGO_PKG_VERSION"), about, long_about = None)]
 struct Args {
     #[arg(
         short,
@@ -92,6 +92,14 @@ impl From<RssItemRaw> for RssItem {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    if let Err(e) = run().await {
+        eprintln!("{} {:#}", "ERROR:".red().bold(), e);
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
+async fn run() -> Result<()> {
     let args = Args::parse();
     println!("Fetching AWS RSS feeds from: {}", args.url);
     println!("Limit: {} items", args.limit);
@@ -121,23 +129,24 @@ async fn main() -> Result<()> {
             .collect();
     }
     let display_count = std::cmp::min(items.len(), args.limit);
+    let items_to_display = items.iter().take(display_count).collect::<Vec<_>>();
 
     if args.json {
-        println!("{:?}", serde_json::to_string_pretty(&items)?);
+        println!("{:?}", serde_json::to_string_pretty(&items_to_display)?);
         return Ok(());
     }
 
-    for (i, mut item) in items.iter().enumerate() {
+    for (i, item) in items_to_display.iter().enumerate() {
         if i >= display_count {
             break;
         }
-        display_announcement(&mut item, i + 1, display_count, &args);
+        display_announcement(&item, i + 1, display_count, &args);
         if i < display_count - 1 {
             println!(); // empty lines between items
         }
     }
 
-    if items.len() > args.limit {
+    if items_to_display.len() > args.limit {
         println!("\n.... and {} more announcements", items.len() - args.limit);
     }
     Ok(())
@@ -147,10 +156,9 @@ async fn fetch_and_parse_rss(args: &Args) -> Result<Vec<RssItem>> {
     let client = reqwest::Client::new();
     let response = client
         .get(&args.url)
-        .header("User-Agent", "naws/0.1.0")
         .header(
             "User-Agent",
-            "Mozilla/5.0 (compatible; naws/0.1.0; +https://github.com/yourhandle/naws)",
+            "Mozilla/5.0 (compatible; naws/0.1.0; +https://github.com/toddlers/naws)",
         )
         .send()
         .await
